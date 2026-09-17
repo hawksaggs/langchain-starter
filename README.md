@@ -21,7 +21,7 @@ code).
 - `agent.py` — the agent itself (model + tools), runnable standalone
 - `sheets.py` — the Google Sheets logging tool (service-account based)
 - `app.py` — Streamlit chat interface around the agent
-- `.streamlit/secrets.toml` — local Streamlit secrets — **placeholders, edit with your real values**
+- `.streamlit/secrets.toml` — local Streamlit secrets, including the `[auth]`/`[auth.google]` Google Sign-In config — **placeholders, edit with your real values**
 - `pyproject.toml` / `uv.lock` — uv's dependency manifest + resolved lockfile (source of truth)
 - `requirements.txt` — auto-exported from `uv.lock`, kept only because some deploy platforms still expect it (see below)
 - `Dockerfile` — fully uv-native container build, for platforms that support Docker
@@ -57,7 +57,49 @@ pip install uv
 2. Sign up (no credit card) and click "Create API Key"
 3. Copy the key
 
-## 3. Set up Google Sheets logging (optional)
+## 3. Set up Google Sign-In (required)
+
+The whole app is gated behind Google login using Streamlit's built-in auth
+(`st.login`/`st.user`/`st.logout`) — no separate username/password system,
+no per-user API keys.
+
+1. **Create a Google OAuth 2.0 Client.** In
+   [Google Cloud Console](https://console.cloud.google.com/) → **APIs &
+   Services → Credentials → Create Credentials → OAuth client ID → Web
+   application**. Under **Authorized redirect URIs**, add one entry per
+   environment you'll run the app in (you can register multiple URIs on the
+   same client):
+   | Environment | `redirect_uri` |
+   |---|---|
+   | Local (`uv run streamlit run app.py`) | `http://localhost:8501/oauth2callback` |
+   | Streamlit Community Cloud | `https://<your-app-name>.streamlit.app/oauth2callback` |
+   Copy the generated **Client ID** and **Client secret** — the same values
+   go into every environment's `[auth.google]` block below.
+2. **Generate a cookie secret** (signs Streamlit's session cookie — unrelated
+   to the OAuth client secret; keep it stable, since regenerating it logs
+   everyone out):
+   ```bash
+   python -c "import secrets; print(secrets.token_hex(32))"
+   ```
+3. **Add an `[auth]` block to `.streamlit/secrets.toml`** (already present
+   with placeholder `client_id`/`client_secret` — fill in your real values):
+   ```toml
+   [auth]
+   redirect_uri = "http://localhost:8501/oauth2callback"
+   cookie_secret = "paste-the-generated-hex-string-here"
+
+   [auth.google]
+   client_id = "your-client-id.apps.googleusercontent.com"
+   client_secret = "your-client-secret"
+   server_metadata_url = "https://accounts.google.com/.well-known/openid-configuration"
+   ```
+   When deploying to Community Cloud, set the same keys in its Secrets UI,
+   but with `redirect_uri` pointed at your `*.streamlit.app` URL instead.
+
+Requires the `authlib` dependency (already in `pyproject.toml`/
+`requirements.txt` — `uv sync` picks it up locally).
+
+## 4. Set up Google Sheets logging (optional)
 
 Skip this if you don't need the sheet-logging feature — the agent works
 fine without it, it just won't have the `add_sheet_entry` tool available.
@@ -87,14 +129,16 @@ You'll put the JSON key content and the sheet ID/URL into
 `.streamlit/secrets.toml` — or just paste them into the Streamlit sidebar
 at runtime instead, if you'd rather not store them in a file at all.
 
-## 4. Run it locally
+## 5. Run it locally
 
 uv reads `pyproject.toml`/`uv.lock` and manages an isolated `.venv`
 automatically — no manual `pip install` or venv activation needed.
 
 **Edit `.streamlit/secrets.toml` first** and replace the placeholder values
-with your real Groq key (and, optionally, your Sheets config). Streamlit
-reads it automatically as `st.secrets` — no exporting or extra setup needed:
+with your real Groq key, Google Sign-In `[auth]`/`[auth.google]` block (see
+step 3 — required, the app won't render without it), and, optionally, your
+Sheets config. Streamlit reads it automatically as `st.secrets` — no
+exporting or extra setup needed:
 
 ```bash
 uv sync                                # creates .venv, installs exact locked versions
@@ -117,7 +161,7 @@ uv run python agent.py
 To add a new dependency later: `uv add <package>` (updates `pyproject.toml`
 and `uv.lock` together). To remove one: `uv remove <package>`.
 
-## 5. Deploy for free
+## 6. Deploy for free
 
 `.streamlit/secrets.toml` is for local development only — it never gets
 uploaded. Each deploy option below uses that platform's own secrets store
@@ -146,7 +190,18 @@ Then:
    GOOGLE_SERVICE_ACCOUNT_JSON = """
    { ...paste the full contents of your downloaded JSON key here... }
    """
+
+   [auth]
+   redirect_uri = "https://your-app-name.streamlit.app/oauth2callback"
+   cookie_secret = "your-generated-hex-string"
+
+   [auth.google]
+   client_id = "your-client-id.apps.googleusercontent.com"
+   client_secret = "your-client-secret"
+   server_metadata_url = "https://accounts.google.com/.well-known/openid-configuration"
    ```
+   Make sure `https://your-app-name.streamlit.app/oauth2callback` is also
+   registered as an Authorized redirect URI on the OAuth client (see step 3).
    With secrets set this way, the sidebar fields pre-fill automatically —
    you (or anyone using your deployed app) won't need to paste them again.
 5. Click **Deploy** → free `*.streamlit.app` URL.

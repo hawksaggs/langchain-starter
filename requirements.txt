@@ -18,6 +18,8 @@ attrs==26.1.0
     # via
     #   jsonschema
     #   referencing
+authlib==1.8.0
+    # via hello-agent
 certifi==2026.7.22
     # via
     #   httpcore
@@ -32,7 +34,10 @@ click==8.5.0
     #   streamlit
     #   uvicorn
 cryptography==50.0.1
-    # via google-auth
+    # via
+    #   authlib
+    #   google-auth
+    #   joserfc
 distro==1.9.0
     # via
     #   groq
@@ -82,6 +87,8 @@ jinja2==3.1.6
     # via
     #   altair
     #   pydeck
+joserfc==1.7.5
+    # via authlib
 jsonpatch==1.33
     # via langchain-core
 jsonpointer==3.1.1

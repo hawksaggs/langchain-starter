@@ -13,8 +13,19 @@ from agent import build_agent, run
 load_dotenv()  # populates os.environ from a local .env file, if present
 
 st.set_page_config(page_title="Hello World AI Agent", page_icon="🤖")
+
+if not st.user.is_logged_in:
+    st.title("🤖 Hello World AI Agent")
+    st.write("Please log in with Google to use this app.")
+    st.button("Log in with Google", on_click=st.login, args=("google",))
+    st.stop()
+
 st.title("🤖 Hello World AI Agent")
 st.caption("Built with LangChain + Groq (free tier) — can log entries to Google Sheets")
+
+st.sidebar.write(f"Signed in as **{st.user.name}** ({st.user.email})")
+st.sidebar.button("Log out", on_click=st.logout)
+st.sidebar.divider()
 
 
 def _secret_or_env(key: str, default: str = "") -> str:
