@@ -13,9 +13,9 @@ from langchain.agents import create_agent
 from langchain_core.tools import tool
 from langchain_groq import ChatGroq
 
-load_dotenv()
+from sheets import make_sheet_logging_tool
 
-DEFAULT_GROQ_MODEL = os.environ.get("GROQ_MODEL", "openai/gpt-oss-20b")
+load_dotenv()  # populates os.environ from a local .env file, if present
 
 
 @tool
@@ -30,22 +30,32 @@ def say_hello(name: str) -> str:
     return f"Hello, {name}! Nice to meet you."
 
 
-def build_agent():
+def build_agent(
+    api_key: str | None = None,
+    google_sheet_id: str | None = None,
+    google_service_account_json: str | dict | None = None,
+):
     """Builds and returns a simple LangChain tool-calling agent (LangChain 1.x API)."""
-    model_name = os.environ.get("GROQ_MODEL", DEFAULT_GROQ_MODEL)
-    api_key = os.environ.get("GROQ_API_KEY")
     llm = ChatGroq(
-        model=model_name,
+        model="openai/gpt-oss-20b",
         temperature=0.3,
-        api_key=api_key,
+        api_key=api_key or os.environ.get("GROQ_API_KEY"),
+    )
+
+    sheet_tool = make_sheet_logging_tool(
+        sheet_id=google_sheet_id,
+        service_account_json=google_service_account_json,
     )
 
     return create_agent(
         model=llm,
-        tools=[get_current_time, say_hello],
+        tools=[get_current_time, say_hello, sheet_tool],
         system_prompt=(
             "You are a friendly, concise hello-world AI agent. "
-            "Use tools when they help answer the question."
+            "Use tools when they help answer the question. "
+            "If the user asks you to log, save, record, or add something to "
+            "their sheet, use the add_sheet_entry tool — don't just say you "
+            "will, actually call it."
         ),
     )
 

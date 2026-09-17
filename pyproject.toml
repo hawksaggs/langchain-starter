@@ -8,9 +8,9 @@ dependencies = [
     "langchain-groq>=1.0",
     "langchain-core>=1.0",
     "streamlit>=1.38",
+    "gspread>=6.2.1",
+    "google-auth>=2.58.0",
     "python-dotenv>=1.2.3",
-    "openai>=3.14.1",
-    "groq>=0.37.1",
 ]
 
 [tool.uv]
