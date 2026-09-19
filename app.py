@@ -8,7 +8,7 @@ import os
 import streamlit as st
 from dotenv import load_dotenv
 
-from agent import build_agent, run
+from agent import build_agent, run_with_search_results
 
 load_dotenv()  # populates os.environ from a local .env file, if present
 
@@ -21,7 +21,11 @@ if not st.user.is_logged_in:
     st.stop()
 
 st.title("🤖 Hello World AI Agent")
-st.caption("Built with LangChain + Groq (free tier) — can log entries to Google Sheets")
+st.caption(
+    "Built with LangChain + Groq (free tier) — can log entries to Google "
+    "Sheets, search financialexpress.com for articles on a topic, and read "
+    "an article link to extract and log any stock recommendations in it"
+)
 
 st.sidebar.write(f"Signed in as **{st.user.name}** ({st.user.email})")
 st.sidebar.button("Log out", on_click=st.logout)
@@ -55,7 +59,11 @@ api_key = st.sidebar.text_input(
 # --- Google Sheets logging (optional) ---------------------------------------
 st.sidebar.divider()
 st.sidebar.subheader("📝 Google Sheets logging")
-st.sidebar.caption('Optional — lets you say things like *"log this: bought milk, $4"*.')
+st.sidebar.caption(
+    'Optional — lets you say things like *"log this: bought milk, $4"*, or '
+    'paste a financialexpress.com article link to log any stock '
+    'recommendations it contains to a "Stock Recommendations" tab.'
+)
 
 sheet_input = st.sidebar.text_input(
     "Sheet ID or URL",
@@ -93,18 +101,31 @@ elif sheet_input or uploaded_key_file:
     )
 
 # --- Chat ---------------------------------------------------------------
+def _render_search_results(results: list[dict]) -> None:
+    if not results:
+        return
+    for r in results:
+        score = r.get("relevance_score")
+        score_str = f" · relevance {score:.2f}" if score is not None else ""
+        st.markdown(f"**[{r['title']}]({r['link']})**  \n{r.get('date', '')}{score_str}")
+        if r.get("excerpt"):
+            st.caption(r["excerpt"])
+
+
 if "history" not in st.session_state:
     st.session_state.history = []
 
-for role, text in st.session_state.history:
-    with st.chat_message(role):
-        st.markdown(text)
+for entry in st.session_state.history:
+    with st.chat_message(entry["role"]):
+        if entry.get("search_results"):
+            _render_search_results(entry["search_results"])
+        st.markdown(entry["content"])
 
 if prompt := st.chat_input("Say something to your agent..."):
     if not api_key:
         st.error("Please enter a Groq API key in the sidebar first.")
     else:
-        st.session_state.history.append(("user", prompt))
+        st.session_state.history.append({"role": "user", "content": prompt, "search_results": None})
         with st.chat_message("user"):
             st.markdown(prompt)
 
@@ -114,8 +135,13 @@ if prompt := st.chat_input("Say something to your agent..."):
                     api_key=api_key,
                     google_sheet_id=sheet_id,
                     google_service_account_json=service_account_json,
+                    user_query=prompt,
                 )
-                response = run(agent_graph, prompt)
+                response, search_results = run_with_search_results(agent_graph, prompt)
+                if search_results:
+                    _render_search_results(search_results)
                 st.markdown(response)
 
-        st.session_state.history.append(("assistant", response))
+        st.session_state.history.append(
+            {"role": "assistant", "content": response, "search_results": search_results}
+        )

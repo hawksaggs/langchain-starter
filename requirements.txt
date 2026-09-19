@@ -20,6 +20,8 @@ attrs==26.1.0
     #   referencing
 authlib==1.8.0
     # via hello-agent
+beautifulsoup4==4.15.0
+    # via hello-agent
 certifi==2026.7.22
     # via
     #   httpcore
@@ -224,6 +226,8 @@ sniffio==1.3.1
     # via
     #   groq
     #   langsmith
+soupsieve==2.9.2
+    # via beautifulsoup4
 starlette==1.6.0
     # via streamlit
 streamlit==1.63.0
@@ -240,6 +244,7 @@ typing-extensions==4.16.0
     # via
     #   altair
     #   anyio
+    #   beautifulsoup4
     #   cryptography
     #   exceptiongroup
     #   groq

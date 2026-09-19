@@ -1,15 +1,51 @@
 # Hello World AI Agent (LangChain + uv + Google Sheets)
 
-A minimal LangChain agent with three tools (`get_current_time`, `say_hello`,
-`add_sheet_entry`), wrapped in a Streamlit chat UI. Uses **Groq** as the LLM
-provider because it has a genuinely free tier (no credit card required),
-unlike OpenAI. Dependencies are managed with
+A minimal LangChain agent with seven tools (`get_current_time`, `say_hello`,
+`add_sheet_entry`, `fetch_article`, `search_financial_express_articles`,
+`get_stock_price`, `add_stock_recommendation`), wrapped in a Streamlit chat
+UI. Uses **Groq** as the LLM provider because it has a genuinely free tier
+(no credit card required), unlike OpenAI. Dependencies are managed with
 **[uv](https://docs.astral.sh/uv/)**, Astral's fast Python package/project
 manager.
 
 Say something like *"log this: bought milk, $4"* or *"add an entry: called
 mom"* and the agent will append a timestamped row to a Google Sheet you
 configure — no code changes needed per entry.
+
+You can also paste a news article link (e.g. a financialexpress.com URL)
+and ask the agent to log any stock recommendations in it. It fetches the
+article, reads it for explicit buy/sell/hold/accumulate/reduce calls on
+named stocks, and appends each one it finds as a structured row — with
+proper column headers (Timestamp, Article URL, Article Title,
+Stock/Company, Ticker/Symbol, Recommendation, Target Price, Current Price,
+upside_percent, Source/Brokerage, Rationale) — to a dedicated
+**"Stock Recommendations"** tab in your sheet, creating that tab
+automatically the first time. Target Price and Current Price are stored as
+plain numbers (no currency symbols or commas), and upside_percent is
+calculated automatically from the two. The stock's ticker/exchange symbol
+and current market price are looked up and filled in automatically (via
+Yahoo Finance's free, no-API-key endpoints, preferring the NSE/BSE listing)
+whenever the article doesn't already state them — you can also just ask
+"what's the current price of TCS?" directly. If an article doesn't contain
+an actual recommendation, the agent just tells you that instead of logging
+anything.
+
+If you don't have a specific link, you can also just describe a topic —
+*"find articles about defence sector stocks"* or *"Jefferies news"* — and
+the agent searches financialexpress.com for matching articles. The search
+always covers the full last month (paginating through the API as needed,
+not just the newest handful of matches) — e.g. asking for *"Jefferies
+news"* picks up everything back to roughly 30 days before today, even for
+a brokerage with dozens of matching articles a week.
+Since financialexpress.com's search matches keywords anywhere in an
+article's raw text (not just when it's actually about that topic), each
+result is scored for relevance by the LLM against your specific request —
+in batches, to keep each call's token usage bounded — before being shown,
+dropping genuine false positives rather than padding the list. Results are
+rendered directly in the chat (title, date, link, excerpt) rather than
+retyped by the model. Ask to log recommendations from one of the results
+and the agent treats its link the same as a pasted
+article URL.
 
 Built and verified against **LangChain 1.x** (`create_agent`, the current
 agent API — older tutorials using `AgentExecutor` /
@@ -19,7 +55,10 @@ code).
 ## Files
 
 - `agent.py` — the agent itself (model + tools), runnable standalone
-- `sheets.py` — the Google Sheets logging tool (service-account based)
+- `sheets.py` — the Google Sheets logging tools (service-account based): free-text entries and structured stock recommendations
+- `article.py` — fetches a news article URL and extracts its title/body text
+- `search.py` — searches financialexpress.com for articles on a topic, with LLM-based relevance filtering
+- `stock_lookup.py` — looks up a stock's ticker and current price via Yahoo Finance (no API key needed)
 - `app.py` — Streamlit chat interface around the agent
 - `.streamlit/secrets.toml` — local Streamlit secrets, including the `[auth]`/`[auth.google]` Google Sign-In config — **placeholders, edit with your real values**
 - `pyproject.toml` / `uv.lock` — uv's dependency manifest + resolved lockfile (source of truth)
@@ -102,7 +141,9 @@ Requires the `authlib` dependency (already in `pyproject.toml`/
 ## 4. Set up Google Sheets logging (optional)
 
 Skip this if you don't need the sheet-logging feature — the agent works
-fine without it, it just won't have the `add_sheet_entry` tool available.
+fine without it, it just won't have the `add_sheet_entry` /
+`add_stock_recommendation` tools available (`fetch_article` still works
+either way, but there's nowhere to log what it finds).
 
 1. **Create a Google Cloud service account.**
    In [Google Cloud Console](https://console.cloud.google.com/), create (or
@@ -211,7 +252,7 @@ Then:
 Same story as above — the Streamlit SDK build step uses `requirements.txt`.
 
 1. Go to <https://huggingface.co/new-space>, choose **Streamlit** as the SDK.
-2. Upload `app.py`, `agent.py`, `sheets.py`, and `requirements.txt`.
+2. Upload `app.py`, `agent.py`, `sheets.py`, `article.py`, `search.py`, `stock_lookup.py`, and `requirements.txt`.
 3. In **Settings → Variables and secrets**, add secrets `GROQ_API_KEY`,
    `GOOGLE_SHEET_ID`, and `GOOGLE_SERVICE_ACCOUNT_JSON` (paste the full JSON
    key content as its value).
@@ -224,7 +265,7 @@ export step — use the included `Dockerfile`, which installs and runs
 everything through uv itself.
 
 1. Go to <https://huggingface.co/new-space>, choose **Docker** as the SDK.
-2. Upload `Dockerfile`, `pyproject.toml`, `uv.lock`, `agent.py`, `app.py`, `sheets.py`.
+2. Upload `Dockerfile`, `pyproject.toml`, `uv.lock`, `agent.py`, `app.py`, `sheets.py`, `article.py`, `search.py`, `stock_lookup.py`.
 3. In **Settings → Variables and secrets**, add secrets `GROQ_API_KEY`,
    `GOOGLE_SHEET_ID`, and `GOOGLE_SERVICE_ACCOUNT_JSON`.
 4. The Space builds the Docker image (via uv) and serves it on the free tier.
